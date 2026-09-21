@@ -23,6 +23,7 @@ https://catalog.workshops.aws/serverless-patterns/en-US
 | Module | Pattern | Status | Notes |
 | --- | --- | --- | --- |
 | [Module 1](module-1) | Intro to Serverless | Complete | Built in the console |
+| [Module 3](module-3) | Synchronous + Idempotence | Complete | Built with AWS SAM |
 | [Module 4](module-4) | Asynchronous Invocation | Complete | Built with AWS SAM |
 | [Module 5](module-5) | Polling | complete | Built with AWS SAM |
 
@@ -31,6 +32,12 @@ https://catalog.workshops.aws/serverless-patterns/en-US
 Build and test a basic serverless application using AWS Lambda, Amazon DynamoDB, and Amazon
 API Gateway. The application stores sample user information in DynamoDB and retrieves the
 stored users through an API Gateway REST API.
+
+### Module 3 — Introduction to Synchronous + Idempotence
+
+In this module, we build an Orders service that lets customers manage their orders. Customers can create a new order, view a specific order, see a list of their orders, edit an order, or cancel it.
+The service uses a shared Lambda layer to retrieve orders from DynamoDB. Order creation also includes idempotency, structured logging, and metrics so repeated requests do not create duplicate orders and the application is easier to monitor.
+The project includes local tests that verify the order workflow and confirm that retrying the same request returns the existing order instead of creating another one.
 
 ### Module 4 — Asynchronous Invocation
 
