@@ -156,10 +156,31 @@ aws cloudformation describe-stacks --stack-name ws-serverless-patterns-userprofi
 
 ## Integration Tests
 
+7 tests: 4 for the Address service, 3 for the Favorite service.
+
+The harness reads both CloudFormation stacks' outputs, creates two confirmed Cognito test
+users with passwords from Secrets Manager, and clears the address table before the run.
+Export both stack names first or the fixture cannot resolve the outputs.
+
 ```bash
+export USERS_STACK_NAME=ws-serverless-patterns-users
+export USERPROFILE_STACK_NAME=ws-serverless-patterns-userprofile
 pip3 install --user -r tests/requirements.txt
 python3 -m pytest tests/integration -v
 ```
+
+Expect `7 passed`. If some fail on the first run, wait 1-2 minutes and rerun: the write paths
+are asynchronous and the tests only sleep 1-2 seconds before asserting.
+
+| Test | Verifies |
+| --- | --- |
+| `test_add_user_address_with_invalid_fields` | request validator rejects a body missing `line1`/`line2` with 400 |
+| `test_add_user_address` | POST returns 200, address lands in DynamoDB via EventBridge |
+| `test_update_user_address` | PUT propagates all five fields |
+| `test_delete_user_address` | DELETE removes the address |
+| `test_access_to_the_favorites_without_authentication` | Cognito authorizer returns 401 |
+| `test_add_user_favorite` | POST returns 200, favorite lands in DynamoDB via SQS |
+| `test_delete_user_favorite` | DELETE removes the favorite |
 
 ## Clean Up
 
