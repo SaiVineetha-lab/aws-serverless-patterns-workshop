@@ -23,8 +23,8 @@ https://catalog.workshops.aws/serverless-patterns/en-US
 | Module | Pattern | Status | Notes |
 | --- | --- | --- | --- |
 | [Module 1](module-1) | Intro to Serverless | Complete | Built in the console |
-| [Module 4](module-4) | Asynchronous Invocation | Complete, deployed, 7/7 tests passing | Built with AWS SAM |
-| [Module 5](module-5) | Polling | Code complete, not yet deployed | Built with AWS SAM |
+| [Module 4](module-4) | Asynchronous Invocation | Complete | Built with AWS SAM |
+| [Module 5](module-5) | Polling | complete | Built with AWS SAM |
 
 ### Module 1 — Introduction to Serverless
 
