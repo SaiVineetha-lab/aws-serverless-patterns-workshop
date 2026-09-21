@@ -7,7 +7,7 @@ import time
 
 def test_order_status(global_config, capsys):
     response = get_order_status(
-        global_config["OrdersServiceEndpoint"],
+        api_endpoint(global_config),
         global_config["regularUserIdToken"],
         global_config['order']['data']['orderId'],
     )
@@ -34,12 +34,22 @@ def test_order_update_process(global_config, capsys):
     assert response['FailedEntryCount'] == 0
     time.sleep(3)
     response = get_order_status(
-        global_config["OrdersServiceEndpoint"],
+        api_endpoint(global_config),
         global_config["regularUserIdToken"],
         order['data']['orderId'],
     )
 
     assert json.loads(response.content) == json.loads(json.dumps((order['data'])))
+
+
+def api_endpoint(global_config):
+    for key in ("OrdersServiceEndpoint", "Module3ApiEndpoint"):
+        if key in global_config:
+            return global_config[key].rstrip('/')
+    raise KeyError(
+        "No orders API endpoint in stack outputs. Looked for OrdersServiceEndpoint "
+        f"and Module3ApiEndpoint, found: {sorted(global_config)}"
+    )
 
 
 def get_order_status(endpoint, token, orderId):
