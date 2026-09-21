@@ -24,6 +24,7 @@ https://catalog.workshops.aws/serverless-patterns/en-US
 | --- | --- | --- | --- |
 | [Module 1](module-1) | Intro to Serverless | Complete | Built in the console |
 | [Module 4](module-4) | Asynchronous Invocation | Complete, deployed, 7/7 tests passing | Built with AWS SAM |
+| [Module 5](module-5) | Polling | Code complete, not yet deployed | Built with AWS SAM |
 
 ### Module 1 — Introduction to Serverless
 
@@ -40,6 +41,16 @@ immediately while Lambda consumers process the work downstream. Reads go straigh
 DynamoDB, separate from the write path.
 
 See [module-4/README.md](module-4/README.md) for the full build, deploy and test instructions.
+
+### Module 5 — Polling
+
+Build an order status service that customers poll while their order is prepared and delivered.
+Restaurants publish `order.updated` events to an EventBridge bus; a Lambda target writes the
+new status to the Orders table; customers read the current status through the Orders API.
+Status changes outlast a request/response cycle, and mobile clients are not reliably reachable
+for webhooks, so polling is the simpler and more robust choice.
+
+See [module-5/README.md](module-5/README.md) for the full build, deploy and test instructions.
 
 ## AWS Region
 
