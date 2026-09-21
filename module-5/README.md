@@ -109,7 +109,21 @@ aws events put-events --entries file://events/test-order-update.json
 A successful publish returns `FailedEntryCount: 0`, and the polling shell flips to
 `Order status matches desired result of IN-PROCESS. Polling is complete!`
 
-## Deviation From the Workshop
+## Deviations From the Workshop
+
+### The orders API endpoint output is named differently
+
+The workshop's `test_order.py` reads `global_config["OrdersServiceEndpoint"]`, but the Module 5
+start-state package exports the endpoint as `Module3ApiEndpoint`, so every test fails with:
+
+```text
+KeyError: 'OrdersServiceEndpoint'
+```
+
+`test_order.py` now resolves whichever key is present and strips the trailing slash, since the
+output ends in `/dev/` and the tests append `/orders/{id}`.
+
+### The Powertools layer
 
 The workshop adds `AWSLambdaPowertoolsPython:20` to `Globals`. That layer breaks on
 `python3.12` because its dependencies import `distutils`, removed by PEP 632 — the same
