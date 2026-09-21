@@ -1,186 +1,92 @@
 # Module 4 — Asynchronous Invocation
 
-## Team Information
+Team Trojans: Sai Vineetha Tirumalla, Shivani Naikoti, Mukesh Singh, Ranadhir
 
-- Team name: Trojans
-- Member 1: Sai Vineetha Tirumalla
-- Member 2: Shivani Naikoti
-- Member 3: Mukesh Singh
-- Member 4: Ranadhir
+Workshop: https://catalog.workshops.aws/serverless-patterns/en-US/module4
 
-## Workshop
+Deployed in `us-east-2`, 7/7 integration tests passing.
 
-https://catalog.workshops.aws/serverless-patterns/en-US/module4
+## What This Builds
 
-## Objective
+A User Profile service using CQRS, where writes are decoupled from reads.
 
-Build a User Profile service using the CQRS and Event-Driven Architecture patterns, so that
-write commands are decoupled from the read models and from the downstream services that react
-to them.
+| | Write path | Read path |
+| --- | --- | --- |
+| Address | API Gateway → EventBridge bus → Lambda → DynamoDB | Lambda → DynamoDB |
+| Favorite | API Gateway → SQS queue → Lambda → DynamoDB | Lambda → DynamoDB |
 
-- **Address Service** — API Gateway puts address change commands directly onto an Amazon
-  EventBridge event bus via a mapping template. Lambda functions subscribed to the bus apply
-  the change to DynamoDB. The caller gets an immediate acknowledgement instead of waiting.
-- **Favorite Service** — API Gateway puts favorite commands directly onto an Amazon SQS queue,
-  also via a mapping template. A Lambda consumer drains the queue and writes to DynamoDB.
-- Reads (`list_user_addresses`, `list_user_favorites`) go straight to DynamoDB, separate from
-  the write path.
+The key idea is that API Gateway writes to the bus and the queue **directly**, through VTL
+mapping templates, with no Lambda in the request path. The caller is acknowledged immediately
+while consumers process the work downstream.
 
-## Services Used
-
-| Service | Role |
+| Endpoint | Integration |
 | --- | --- |
-| Amazon EventBridge | Event bus for address change commands |
-| Amazon SQS | Queue for favorite add/delete commands |
-| Amazon API Gateway | REST front door; mapping templates integrate directly with EventBridge and SQS |
-| AWS Lambda | Command handlers and query handlers |
-| Amazon DynamoDB | Address and favorite data stores |
-| Amazon Cognito | Authentication for the API |
-| AWS SAM | Infrastructure as code (`template.yaml`) |
-| OpenAPI | API definition consumed by API Gateway |
+| `POST /address` | EventBridge `PutEvents`, detail-type `address.added` |
+| `PUT /address/{addressId}` | EventBridge `PutEvents`, detail-type `address.updated` |
+| `DELETE /address/{addressId}` | EventBridge `PutEvents`, detail-type `address.deleted` |
+| `POST /favorite` | SQS `SendMessage`, command `AddFavorite` |
+| `DELETE /favorite/{restaurantId}` | SQS `SendMessage`, command `DeleteFavorite` |
+| `GET /address`, `GET /favorite` | Lambda proxy |
 
-## Prerequisite
+Cognito guards every endpoint. The user id comes from `$context.authorizer.claims.sub`, so the
+client cannot spoof it.
 
-Module 2 resources must be deployed as the `ws-serverless-patterns` stack. To start from a
-known-good state instead:
+## Files
+
+- `userprofile/template.yaml` — 16 resources: EventBridge bus, SQS queue, 2 DynamoDB tables,
+  6 Lambdas, 2 IAM roles, API Gateway
+- `userprofile/api.yaml` — OpenAPI 3.0 definition with the mapping templates
+- `userprofile/src/api/` — Lambda handlers (provided by the workshop)
+- `userprofile/tests/integration/` — 7 integration tests
+
+## Deploy
+
+Requires the Module 2 stack. Run in AWS CloudShell, region `us-east-2`.
 
 ```bash
-wget -O ws-serverless-patterns.zip "https://ws-assets-prod-iad-r-iad-ed304a55c2ca1aee.s3.us-east-1.amazonaws.com/76bc5278-3f38-46e8-b306-f0bfda551f5a/module4/sam-python/ws-serverless-patterns-2026-08-20.zip"
-unzip ws-serverless-patterns.zip
-cd ws-serverless-patterns
-sam build
-sam deploy --guided --stack-name ws-serverless-patterns --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND
+sudo dnf install -y python3.12 python3.12-pip
 ```
 
-## Project Layout
+```bash
+cd ~ && wget -q -O ws.zip "https://ws-assets-prod-iad-r-iad-ed304a55c2ca1aee.s3.us-east-1.amazonaws.com/76bc5278-3f38-46e8-b306-f0bfda551f5a/module4/sam-python/ws-serverless-patterns-2026-08-20.zip" && unzip -q ws.zip && cd ws-serverless-patterns && sam build && sam deploy --guided --stack-name ws-serverless-patterns --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND
+```
 
-`userprofile/` is the module 4 start state, taken from the workshop's `module4_setup.sh`.
-It is a self-contained SAM project separate from the module 2 stack.
+Get the User Pool id (the nested stack has a random suffix):
+
+```bash
+USERS_STACK=$(aws cloudformation describe-stacks --query "Stacks[?starts_with(StackName,'ws-serverless-patterns-users')].StackName | [0]" --output text) && aws cloudformation describe-stacks --stack-name $USERS_STACK --query "Stacks[0].Outputs[?OutputKey=='UserPool'].OutputValue" --output text
+```
+
+```bash
+cd ~/aws-serverless-patterns-workshop/module-4/userprofile && sam build && sam deploy --guided --stack-name ws-serverless-patterns-userprofile --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND
+```
+
+## Test
+
+```bash
+export USERS_STACK_NAME=$USERS_STACK && export USERPROFILE_STACK_NAME=ws-serverless-patterns-userprofile && python3 -m pip install -q -r tests/requirements.txt && python3 -m pytest tests/integration -v
+```
+
+Expect `7 passed` — address add/update/delete, favorite add/delete, request validation, and a
+401 without a token. Rerun once if a test fails; the write paths are async and the tests only
+sleep 1-2 seconds.
+
+## Deviation From the Workshop
+
+The workshop pins `AWSLambdaPowertoolsPython:20` in `Globals` while setting `Runtime:
+python3.12`. That layer's dependencies import `distutils`, removed in Python 3.12, so every
+function fails at init:
 
 ```text
-userprofile/
-├── events/event.json
-├── requirements.txt
-├── src/api/
-│   ├── address/
-│   │   ├── add_user_address.py
-│   │   ├── delete_user_address.py
-│   │   ├── edit_user_address.py
-│   │   └── list_user_addresses.py
-│   └── favorites/
-│       ├── list_user_favorites.py
-│       └── process_favorites_queue.py
-├── template.yaml
-└── tests/
-    ├── integration/
-    │   ├── conftest.py
-    │   ├── test_api_gateway_favorites.py
-    │   └── test_api_gateway_user_addresses.py
-    └── requirements.txt
+Runtime.ImportModuleError: No module named 'distutils'
 ```
 
-`template.yaml` ships as an empty skeleton. The workshop steps fill in `Globals`, `Resources`
-and `Outputs`.
+The GETs return `502`. The POSTs still return `200`, because API Gateway answers before any
+Lambda runs — so the writes fail silently and the tables stay empty.
 
-## Workshop Steps
-
-| Step | Page |
-| --- | --- |
-| Module Setup | https://catalog.workshops.aws/serverless-patterns/en-US/module4/sam-python/setup |
-| 1 — Create Address service | https://catalog.workshops.aws/serverless-patterns/en-US/module4/sam-python/address-service |
-| 1.2 — Add Business Logic | https://catalog.workshops.aws/serverless-patterns/en-US/module4/sam-python/bizlogic |
-| 1.3 — Define the API | https://catalog.workshops.aws/serverless-patterns/en-US/module4/sam-python/openapi |
-| 1.4 — Create the API | https://catalog.workshops.aws/serverless-patterns/en-US/module4/sam-python/create-api |
-| 1.5 — List Addresses | https://catalog.workshops.aws/serverless-patterns/en-US/module4/sam-python/get-address |
-| 1.6 — Integration tests | https://catalog.workshops.aws/serverless-patterns/en-US/module4/sam-python/integration-test |
-| 2 — Create Favorite service | https://catalog.workshops.aws/serverless-patterns/en-US/module4/sam-python/favorites-service |
-| 2.1 — Connect the API | https://catalog.workshops.aws/serverless-patterns/en-US/module4/sam-python/connect-fav-api |
-| 2.2 — Integration tests — Favorites | https://catalog.workshops.aws/serverless-patterns/en-US/module4/sam-python/favorites-integration-tests |
-| 3 — Clean up | https://catalog.workshops.aws/serverless-patterns/en-US/module4/sam-python/clean-up-en |
-
-## Running in AWS CloudShell
-
-CloudShell already has the AWS CLI, SAM CLI, git and your console credentials, so there is
-nothing to install and no `aws login` step. Open CloudShell from the console toolbar with the
-region set to **us-east-2**.
-
-Only `$HOME` survives between sessions. Do all work under `~/`.
-
-### 1. Check the Python runtime
-
-`sam build` needs a `python3.12` binary to match the Lambda runtime.
-
-```bash
-python3 --version
-```
-
-If it is not 3.12, install it (repeat each session, `dnf` writes outside `$HOME`):
-
-```bash
-sudo dnf install -y python3.12
-```
-
-### 2. Deploy the Module 2 prerequisite stack
-
-Skip if `ws-serverless-patterns-users` already exists in CloudFormation.
-
-```bash
-cd ~ && wget -O ws-serverless-patterns.zip "https://ws-assets-prod-iad-r-iad-ed304a55c2ca1aee.s3.us-east-1.amazonaws.com/76bc5278-3f38-46e8-b306-f0bfda551f5a/module4/sam-python/ws-serverless-patterns-2026-08-20.zip" && unzip -q ws-serverless-patterns.zip && cd ws-serverless-patterns && sam build && sam deploy --guided --stack-name ws-serverless-patterns --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND
-```
-
-### 3. Get this branch
-
-```bash
-cd ~ && git clone -b module-4-async-invocation https://github.com/SaiVineetha-lab/aws-serverless-patterns-workshop.git && cd aws-serverless-patterns-workshop/module-4/userprofile
-```
-
-### 4. Look up the User Pool id
-
-```bash
-aws cloudformation describe-stacks --stack-name ws-serverless-patterns-users --query "Stacks[0].Outputs[?OutputKey=='UserPool'].OutputValue" --output text
-```
-
-### 5. Build and deploy
-
-```bash
-sam build && sam deploy --guided --stack-name ws-serverless-patterns-userprofile --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND
-```
-
-Enter the User Pool id when prompted for `UserPool`. Accept the defaults for everything else.
-
-### 6. Read the outputs
-
-```bash
-aws cloudformation describe-stacks --stack-name ws-serverless-patterns-userprofile --query "Stacks[0].Outputs" --output table
-```
-
-## Integration Tests
-
-7 tests: 4 for the Address service, 3 for the Favorite service.
-
-The harness reads both CloudFormation stacks' outputs, creates two confirmed Cognito test
-users with passwords from Secrets Manager, and clears the address table before the run.
-Export both stack names first or the fixture cannot resolve the outputs.
-
-```bash
-export USERS_STACK_NAME=ws-serverless-patterns-users
-export USERPROFILE_STACK_NAME=ws-serverless-patterns-userprofile
-pip3 install --user -r tests/requirements.txt
-python3 -m pytest tests/integration -v
-```
-
-Expect `7 passed`. If some fail on the first run, wait 1-2 minutes and rerun: the write paths
-are asynchronous and the tests only sleep 1-2 seconds before asserting.
-
-| Test | Verifies |
-| --- | --- |
-| `test_add_user_address_with_invalid_fields` | request validator rejects a body missing `line1`/`line2` with 400 |
-| `test_add_user_address` | POST returns 200, address lands in DynamoDB via EventBridge |
-| `test_update_user_address` | PUT propagates all five fields |
-| `test_delete_user_address` | DELETE removes the address |
-| `test_access_to_the_favorites_without_authentication` | Cognito authorizer returns 401 |
-| `test_add_user_favorite` | POST returns 200, favorite lands in DynamoDB via SQS |
-| `test_delete_user_favorite` | DELETE removes the favorite |
+Fix: drop `Layers` and declare `aws-lambda-powertools[tracer]` in a `requirements.txt` under
+each `CodeUri`, so `sam build` bundles a current version. SAM only reads `requirements.txt`
+from inside the function directory, not the project root.
 
 ## Clean Up
 
