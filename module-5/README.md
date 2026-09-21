@@ -86,12 +86,28 @@ Expect `2 passed`:
 
 ## Watch Polling Work
 
+Create a test order, then poll it. `$URL` is the `OrdersServiceEndpoint` output and ends in a
+slash, so there is no slash before `orders`:
+
 ```bash
-./polling-api.sh "<OrdersServiceEndpoint>/orders/2" "<IdToken>"
+curl -X POST -H "Authorization:$ID_TOKEN" -d @events/event-new-order.json ${URL}orders
 ```
 
-It requests every 2 seconds and stops when status reaches `IN-PROCESS`. Publish an event from
-another shell to watch it flip.
+```bash
+sh ./polling-api.sh ${URL}orders/O2 $ID_TOKEN
+```
+
+It requests every 2 seconds and prints `Still waiting for IN-PROCESS status` each time. In a
+second shell, simulate the restaurant updating the order. Edit
+`events/test-order-update.json` first and replace `<your-user-sub>` with your Cognito user
+sub, then:
+
+```bash
+aws events put-events --entries file://events/test-order-update.json
+```
+
+A successful publish returns `FailedEntryCount: 0`, and the polling shell flips to
+`Order status matches desired result of IN-PROCESS. Polling is complete!`
 
 ## Deviation From the Workshop
 
