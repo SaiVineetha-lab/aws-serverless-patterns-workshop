@@ -59,6 +59,13 @@ for webhooks, so polling is the simpler and more robust choice.
 
 See [module-5/README.md](module-5/README.md) for the full build, deploy and test instructions.
 
+## CI and Project Tracking
+
+- **Jenkins**: [`Jenkinsfile`](Jenkinsfile) compiles every module, lints the SAM templates and runs the Module 3 unit tests. Builds are triggered by GitHub push webhooks, with Poll SCM as a fallback.
+- **GitHub Projects**: remaining work is tracked with Iteration and Priority fields, a board view and built-in automation.
+
+See [docs/jenkins-github-projects.md](docs/jenkins-github-projects.md) for the full setup.
+
 ## AWS Region
 
 ```text
